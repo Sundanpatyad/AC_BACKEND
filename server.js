@@ -21,6 +21,19 @@ const mockRoutes = require("./routes/mocktest")
 const chatRoutes = require("./routes/chatRoutes")
 const materialRoutes = require('./routes/studyMaterialsRoutes')
 
+
+app.use(express.static(path.join(__dirname, '../frontend/dist')));
+
+// Serve service-worker.js with correct MIME type
+app.get('/service-worker.js', (req, res) => {
+  res.setHeader('Content-Type', 'application/javascript');
+  res.sendFile(path.join(__dirname, '../frontend/dist/service-worker.js'));
+});
+
+// Serve the index.html for all other routes
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, '../frontend/dist/index.html'));
+});
 // middleware 
 app.use(express.json()); // to parse json body
 app.use(cookieParser());
