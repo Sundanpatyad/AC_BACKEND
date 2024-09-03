@@ -21,19 +21,6 @@ const mockRoutes = require("./routes/mocktest")
 const chatRoutes = require("./routes/chatRoutes")
 const materialRoutes = require('./routes/studyMaterialsRoutes')
 
-
-app.use(express.static(path.join(__dirname, '../frontend/dist')));
-
-// Serve service-worker.js with correct MIME type
-app.get('/service-worker.js', (req, res) => {
-  res.setHeader('Content-Type', 'application/javascript');
-  res.sendFile(path.join(__dirname, '../frontend/dist/service-worker.js'));
-});
-
-// Serve the index.html for all other routes
-app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, '../frontend/dist/index.html'));
-});
 // middleware 
 app.use(express.json()); // to parse json body
 app.use(cookieParser());
@@ -64,15 +51,15 @@ app.use('/api/v1/mock', mockRoutes);
 app.use('/api/v1/chats', chatRoutes);
 app.use('/api/v1/materials', materialRoutes);
 
-// if (process.env.NODE_ENV === "production") {
-//     // Serve static files from the frontend/dist directory
-//     app.use(express.static(path.join(__dirname, "../frontend/dist")));
+if (process.env.NODE_ENV === "production") {
+    // Serve static files from the frontend/dist directory
+    app.use(express.static(path.join(__dirname, "../frontend/dist")));
 
-//     // For all other requests, serve the React app's index.html
-//     app.get("*", (req, res) => {
-//         res.sendFile(path.resolve(__dirname, "../frontend/dist", "index.html"));
-//     });
-// }
+    // For all other requests, serve the React app's index.html
+    app.get("*", (req, res) => {
+        res.sendFile(path.resolve(__dirname, "../frontend/dist", "index.html"));
+    });
+}
 
 // Default Route
 app.get('/', (req, res) => {
