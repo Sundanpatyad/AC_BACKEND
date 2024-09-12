@@ -1,71 +1,76 @@
-const express = require('express')
-const app = express();
+const cluster = require('cluster');
+const os = require('os');
+const express = require('express');
 const path = require("path");
-
-// packages
 const fileUpload = require('express-fileupload');
 const cookieParser = require('cookie-parser');
 const cors = require('cors');
 require('dotenv').config();
 
-// connection to DB and cloudinary
 const { connectDB } = require('./config/database');
 const { cloudinaryConnect } = require('./config/cloudinary');
 
-// routes
 const userRoutes = require('./routes/user');
 const profileRoutes = require('./routes/profile');
 const paymentRoutes = require('./routes/payments');
 const courseRoutes = require('./routes/course');
-const mockRoutes = require("./routes/mocktest")
-const chatRoutes = require("./routes/chatRoutes")
-const materialRoutes = require('./routes/studyMaterialsRoutes')
+const mockRoutes = require("./routes/mocktest");
+const chatRoutes = require("./routes/chatRoutes");
+const materialRoutes = require('./routes/studyMaterialsRoutes');
 
-// middleware 
-app.use(express.json()); // to parse json body
-app.use(cookieParser());
-app.use(cors());
-app.use(
-    fileUpload({
+const numCPUs = os.cpus().length;
+
+if (cluster.isMaster) {
+    console.log(`Master ${process.pid} is running`);
+
+    // Fork workers
+    for (let i = 0; i < numCPUs; i++) {
+        cluster.fork();
+    }
+
+    cluster.on('exit', (worker, code, signal) => {
+        console.log(`Worker ${worker.process.pid} died`);
+        // Replace the dead worker
+        cluster.fork();
+    });
+} else {
+    const app = express();
+
+    // Middleware
+    app.use(express.json());
+    app.use(cookieParser());
+    app.use(cors());
+    app.use(fileUpload({
         useTempFiles: true,
         tempFileDir: '/tmp'
-    })
-)
+    }));
 
-const PORT = process.env.PORT || 5000;
+    // Connections
+    connectDB();
+    cloudinaryConnect();
 
-app.listen(PORT, () => {
-    console.log(`Server Started on PORT ${PORT}`);
-});
+    // Mount routes
+    app.use('/api/v1/auth', userRoutes);
+    app.use('/api/v1/profile', profileRoutes);
+    app.use('/api/v1/payment', paymentRoutes);
+    app.use('/api/v1/course', courseRoutes);
+    app.use('/api/v1/mock', mockRoutes);
+    app.use('/api/v1/chats', chatRoutes);
+    app.use('/api/v1/materials', materialRoutes);
 
-// connections
-connectDB();
-cloudinaryConnect();
+    // Default Route
+    app.get('/', (req, res) => {
+        res.send(`
+        <div>
+            This is Default Route
+            <p>Everything is OK</p>
+            <p>Worker ${process.pid} responded to this request</p>
+        </div>`);
+    });
 
-// mount route
-app.use('/api/v1/auth', userRoutes);
-app.use('/api/v1/profile', profileRoutes);
-app.use('/api/v1/payment', paymentRoutes);
-app.use('/api/v1/course', courseRoutes);
-app.use('/api/v1/mock', mockRoutes);
-app.use('/api/v1/chats', chatRoutes);
-app.use('/api/v1/materials', materialRoutes);
+    const PORT = process.env.PORT || 5000;
 
-// if (process.env.NODE_ENV === "production") {
-//     // Serve static files from the frontend/dist directory
-//     app.use(express.static(path.join(__dirname, "../frontend/dist")));
-
-//     // For all other requests, serve the React app's index.html
-//     app.get("*", (req, res) => {
-//         res.sendFile(path.resolve(__dirname, "../frontend/dist", "index.html"));
-//     });
-// }
-
-// Default Route
-app.get('/', (req, res) => {
-    res.send(`
-    <div>
-        This is Default Route  
-        <p>Everything is OK</p>
-    </div>`);
-});
+    app.listen(PORT, () => {
+        console.log(`Worker ${process.pid} started on PORT ${PORT}`);
+    });
+}
