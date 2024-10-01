@@ -423,7 +423,6 @@ exports.googleAuth = async (req, res) => {
                 additionalDetails: profileDetails._id,
                 approved: true,
                 image: picture,
-                mobileNumber:null
             });
         }
 
