@@ -7,7 +7,8 @@ const {
     login,
     sendOTP,
     changePassword,
-    googleAuth
+    googleAuth,
+    updateMobileNumber
 } = require('../controllers/auth');
 
 // Resetpassword controllers
@@ -34,6 +35,7 @@ router.post('/signup', signup);
 // Route for user login
 router.post('/login', login);
 router.post('/google', googleAuth);
+router.put('/confirm-mobile',auth, updateMobileNumber);
 
 // Route for sending OTP to the user's email
 router.post('/sendotp', sendOTP);

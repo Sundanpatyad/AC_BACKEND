@@ -15,6 +15,65 @@ const { OAuth2Client } = require('google-auth-library');
 
 const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
+
+// Controller function for updating mobile number
+exports.updateMobileNumber = async (req, res) => {
+    try {
+        const userId = req.user.id;
+      const { mobileNumber } = req.body;
+      console.log(req.user , mobileNumber)
+  
+      if (!userId || !mobileNumber) {
+        return res.status(400).json({
+          success: false,
+          message: 'User ID and mobile number are required'
+        });
+      }
+  
+      // Check if the mobile number is already in use
+      const existingUser = await User.findOne({ mobileNumber });
+      if (existingUser && existingUser._id.toString() !== userId) {
+        return res.status(400).json({
+          success: false,
+          message: 'Mobile number is already in use by another user'
+        });
+      }
+  
+      // Update the user's mobile number
+      const updatedUser = await User.findByIdAndUpdate(
+        userId,
+        { mobileNumber },
+        { new: true, runValidators: true }
+      );
+  
+      if (!updatedUser) {
+        return res.status(404).json({
+          success: false,
+          message: 'User not found'
+        });
+      }
+  
+      res.status(200).json({
+        success: true,
+        message: 'Mobile number updated successfully',
+        user: {
+          _id: updatedUser._id,
+          firstName: updatedUser.firstName,
+          lastName: updatedUser.lastName,
+          email: updatedUser.email,
+          mobileNumber: updatedUser.mobileNumber
+        }
+      });
+    } catch (error) {
+      console.error('Error updating mobile number:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error updating mobile number',
+        error: error.message
+      });
+    }
+  };
+
 // ================ SEND-OTP For Email Verification ================
 exports.sendOTP = async (req, res) => {
     try {
@@ -78,7 +137,7 @@ exports.signup = async (req, res) => {
     try {
         // extract data 
         const { firstName, lastName, email, password, confirmPassword,
-            accountType, contactNumber, otp } = req.body;
+            accountType, contactNumber, otp  } = req.body;
 
         // validation
         if (!firstName || !lastName || !email || !password || !confirmPassword || !accountType || !otp) {
@@ -137,7 +196,7 @@ exports.signup = async (req, res) => {
 
         // additionDetails
         const profileDetails = await Profile.create({
-            gender: null, dateOfBirth: null, about: null, contactNumber: null
+            gender: null, dateOfBirth: null, about: null, contactNumber: null , mobileNumber :null
         });
 
         let approved = "";
@@ -147,7 +206,7 @@ exports.signup = async (req, res) => {
         const userData = await User.create({
             firstName, lastName, email, password: hashedPassword, contactNumber,
             accountType: accountType, additionalDetails: profileDetails._id,
-            approved: approved,
+            approved: approved, mobileNumber:null,
             image: `https://api.dicebear.com/5.x/initials/svg?seed=${firstName} ${lastName}`
         });
 
@@ -364,6 +423,7 @@ exports.googleAuth = async (req, res) => {
                 additionalDetails: profileDetails._id,
                 approved: true,
                 image: picture,
+                mobileNumber:null
             });
         }
 

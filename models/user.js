@@ -9,7 +9,7 @@ const userSchema = new mongoose.Schema(
     },
     lastName: {
       type: String,
-      required: true,
+      required: false,
       trim: true
     },
     email: {
@@ -71,9 +71,20 @@ const userSchema = new mongoose.Schema(
         type: mongoose.Schema.Types.ObjectId,
         ref: 'CourseProgress'
       }
-    ]
+    ],
+    mobileNumber: {
+      type: String,
+      required: false,
+      unique: true,
+      trim: true,
+      default: null,
+    }
   },
   { timestamps: true }
 );
 
-module.exports = mongoose.model('User', userSchema);
+const User = mongoose.model('User', userSchema);
+
+
+
+module.exports = User;
