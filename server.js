@@ -19,7 +19,7 @@ const chatRoutes = require("./routes/chatRoutes");
 const materialRoutes = require('./routes/studyMaterialsRoutes');
 
 const numCPUs = os.cpus().length;
-
+console.log(numCPUs)
 if (cluster.isMaster) {
     console.log(`Master ${process.pid} is running`);
 
@@ -65,6 +65,7 @@ if (cluster.isMaster) {
             This is Default Route
             <p>Everything is OK</p>
             <p>Worker ${process.pid} responded to this request</p>
+            <p>Total number of Cpu's ${numCPUs} responded to this request</p>
         </div>`);
     });
 
