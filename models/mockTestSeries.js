@@ -27,6 +27,7 @@ const MockTestSeriesSchema = new mongoose.Schema({
         }
       ],
       duration: { type: Number, required: true },
+      negative:{type : Number , default:0},
       price: { type: Number },
       status: { type: String, enum: ['published', 'draft'], default: 'published' },
       studentsEnrolled: [

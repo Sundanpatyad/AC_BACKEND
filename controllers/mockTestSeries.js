@@ -70,7 +70,7 @@ exports.getMockTestSeriesById = async (req, res) => {
                 message: 'Mock test series not found'
             });
         }
-
+       console.log(series)
         res.status(200).json({
             success: true,
             data: series

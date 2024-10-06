@@ -7,7 +7,7 @@ const Section = require('../models/section');
 exports.createMockTests = async (req, res) => {
     try {
       // Extract data from request body
-      const { testName, questions, duration, status, id } = req.body;
+      const { testName, questions, duration, status, negative,  id } = req.body;
   
       // Basic validation for required fields
       if (!testName || !questions || !duration || !id) {
@@ -82,7 +82,7 @@ exports.createMockTests = async (req, res) => {
   
       // Fetch mock details using findById with populate
       const mockDetails = await Mocktest.findById(mockId).populate('questions'); // Corrected to use `mockId` directly
-  
+      console.log(mockDetails)
       // Check if mock is found
       if (!mockDetails) {
         return res.status(404).json({
