@@ -25,10 +25,22 @@ const attemptDetailsSchema = new mongoose.Schema(
       type: Number,
       required: true
     },
-    correctAnswers: {
-      type: Number,
-      required: true
-    },
+    correctAnswers: [
+      {
+        questionText: {
+          type: String,
+          required: true
+        },
+        userAnswer: {
+          type: String,
+          required: true
+        },
+        correctAnswer: {
+          type: String,
+          required: true
+        }
+      }
+    ],
     incorrectAnswers: {
       type: Number,
       required: true
