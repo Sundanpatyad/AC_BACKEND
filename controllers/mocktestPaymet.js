@@ -155,18 +155,3 @@ exports.verifyMockTestPayment = async (req, res) => {
         session.endSession();
     }
 };
-
-// Helper function to send email (not exposed as an API endpoint)
-async function sendMockTestPaymentSuccessEmail(userId, orderId, paymentId, amount) {
-    try {
-        const user = await User.findById(userId);
-        await mailSender(
-            user.email,
-            `Payment Received for Mock Test Series`,
-            `Dear ${user.firstName},\n\nYour payment of INR ${amount / 100} has been received successfully.\nOrder ID: ${orderId}\nPayment ID: ${paymentId}\n\nThank you for your purchase!`
-        );
-        console.log(`Payment success email sent for order ${orderId}`);
-    } catch (error) {
-        console.error("Error in sending mail:", error);
-    }
-}

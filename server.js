@@ -16,6 +16,7 @@ const paymentRoutes = require('./routes/payments');
 const courseRoutes = require('./routes/course');
 const mockRoutes = require("./routes/mocktest");
 const chatRoutes = require("./routes/chatRoutes");
+const admin = require("./routes/adminRoutes");
 const materialRoutes = require('./routes/studyMaterialsRoutes');
 
 const numCPUs = os.cpus().length;
@@ -57,6 +58,7 @@ if (cluster.isMaster) {
     app.use('/api/v1/mock', mockRoutes);
     app.use('/api/v1/chats', chatRoutes);
     app.use('/api/v1/materials', materialRoutes);
+    app.use('/api/v1/admin', admin);
 
     // Default Route
     app.get('/', (req, res) => {
