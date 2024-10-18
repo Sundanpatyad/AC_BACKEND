@@ -74,9 +74,9 @@ const getUsersWithoutAssignedMocks = async (req, res) => {
         // Aggregation pipeline to find users with paid orders but no mock tests assigned
         const pipeline = [
             {
-                // Step 1: Join Order with User model
+                // Step 1: Join Order collection with the User collection
                 $lookup: {
-                    from: 'users', // Collection name of the User model
+                    from: 'users', // Name of the User collection
                     localField: 'userId',
                     foreignField: '_id',
                     as: 'userDetails'
@@ -90,19 +90,18 @@ const getUsersWithoutAssignedMocks = async (req, res) => {
                 // Step 3: Match orders where the status is 'paid' and no mock tests are assigned
                 $match: {
                     status: 'paid',
-                    mockTestIds: { $size: 0 } // Ensures the array is empty
+                    mockTestIds: { $eq: [] } // Check that no mock test IDs are assigned
                 }
             },
             {
                 // Step 4: Project required user details from the userDetails field
                 $project: {
-                    _id: 0, // Do not return the order's _id
-                    userId: '$userDetails._id', // Return the user's _id
+                    _id: 0, // Exclude the order's _id
+                    userId: '$userDetails._id', // Include the user's _id
                     firstName: '$userDetails.firstName',
                     lastName: '$userDetails.lastName',
                     email: '$userDetails.email',
                     courses: '$userDetails.courses',
-                    mocktests: '$userDetails.mocktests',
                     mobileNumber: '$userDetails.mobileNumber'
                 }
             }
@@ -124,6 +123,7 @@ const getUsersWithoutAssignedMocks = async (req, res) => {
         });
     }
 };
+
 
 module.exports = {
   getUsersByMockTest,
