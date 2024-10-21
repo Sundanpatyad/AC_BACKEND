@@ -49,7 +49,7 @@ exports.captureMockTestPayment = async (req, res) => {
         if (result.length === 0 || result[0].count !== mockTestIds.length) {
             return res.status(400).json({ success: false, message: "One or more mock tests are unavailable or already purchased" });
         }
- 
+
         const totalAmount = result[0].totalAmount;
         const currency = "INR";
         const options = {
@@ -59,7 +59,7 @@ exports.captureMockTestPayment = async (req, res) => {
         };
 
         const paymentResponse = await instance.instance.orders.create(options);
-        
+
         // Save the order with the idempotency key
         await Order.create({
             userId,
@@ -73,7 +73,7 @@ exports.captureMockTestPayment = async (req, res) => {
             success: true,
             message: paymentResponse,
         });
-        
+
     } catch (error) {
         console.error("Error in captureMockTestPayment:", error);
         return res.status(500).json({ success: false, message: "Could not initiate order" });
@@ -87,6 +87,7 @@ exports.verifyMockTestPayment = async (req, res) => {
 
     const { razorpay_order_id, razorpay_payment_id, razorpay_signature, itemId } = req.body;
     const userId = req.user.id;
+    console.log("body receivced ==>", req.body)
 
     try {
         if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature || !itemId || !userId) {
@@ -96,20 +97,22 @@ exports.verifyMockTestPayment = async (req, res) => {
         // Check if this payment was already verified
         const existingVerification = await PaymentVerification.findOne({ razorpayOrderId: razorpay_order_id });
         if (existingVerification) {
-            return res.status(200).json({ success: true, message: "Payment already verified" });
+            return res.status(201).json({ success: true, message: "Payment already verified" });
         }
+        console.log("payment already done ==>", existingVerification);
 
         let body = razorpay_order_id + "|" + razorpay_payment_id;
         const expectedSignature = crypto
             .createHmac("sha256", process.env.RAZORPAY_SECRET)
             .update(body.toString())
             .digest("hex");
-
+        console.log("signature ==>", expectedSignature)
         if (expectedSignature !== razorpay_signature) {
             return res.status(400).json({ success: false, message: "Payment signature verification failed." });
         }
 
         const mockTestIds = Array.isArray(itemId) ? itemId : [itemId];
+        console.log("moke test id ==>", mockTestIds);
 
         // Update MockTestSeries and User in a single operation
         const updateResult = await MockTestSeries.updateMany(
@@ -123,10 +126,10 @@ exports.verifyMockTestPayment = async (req, res) => {
             { session }
         );
 
-        if (updateResult.modifiedCount !== mockTestIds.length) {
-            throw new Error("Failed to update all mock test series");
-        }
-
+        // if (updateResult.modifiedCount !== mockTestIds.length) {
+        //     throw new Error("Failed to update all mock test series");
+        // }
+        console.log("updated resuilt ==>", updateResult)
         await User.updateOne(
             { _id: new mongoose.Types.ObjectId(userId) },
             { $addToSet: { mocktests: { $each: mockTestIds.map(id => new mongoose.Types.ObjectId(id)) } } },
@@ -139,7 +142,7 @@ exports.verifyMockTestPayment = async (req, res) => {
             razorpayPaymentId: razorpay_payment_id,
             mockTestIds
         }], { session });
-
+        console.log("verification create ==>", PaymentVerification);
         await session.commitTransaction();
 
         // // Send email asynchronously

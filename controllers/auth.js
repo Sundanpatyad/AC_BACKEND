@@ -263,8 +263,9 @@ exports.login = async (req, res) => {
 
             // Generate token 
             const token = jwt.sign(payload, process.env.JWT_SECRET, {
-                expiresIn: "20d",
-            });
+                expiresIn: "365d", // 1 year
+              });
+              
 
             user = user.toObject();
             user.token = token;
@@ -273,9 +274,10 @@ exports.login = async (req, res) => {
 
             // cookie
             const cookieOptions = {
-                expires: new Date(Date.now() + 20 * 24 * 60 * 60 * 1000), // 3 days
+                expires: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000), // 1 year
                 httpOnly: true
             }
+            
 
             res.cookie('token', token, cookieOptions).status(200).json({
                 success: true,
