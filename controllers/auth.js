@@ -435,7 +435,7 @@ exports.googleAuth = async (req, res) => {
         };
 
         const jwtToken = jwt.sign(payload, process.env.JWT_SECRET, {
-            expiresIn: "5d",
+            expiresIn: "365d",
         });
 
         user = user.toObject();
@@ -443,7 +443,7 @@ exports.googleAuth = async (req, res) => {
         user.password = undefined;
 
         const cookieOptions = {
-            expires: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000), // 5 days
+            expires: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000), // 5 days
             httpOnly: true,
         };
 
