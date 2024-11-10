@@ -4,7 +4,7 @@ services:
     container_name: ac-backend
     build:
       context: .
-      dockerfile: ./Dockerfile
+      dockerfile: ./dockerfile
       target: production
     env_file:
       - .env
