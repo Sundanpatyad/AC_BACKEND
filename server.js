@@ -20,9 +20,7 @@ const admin = require("./routes/adminRoutes");
 const materialRoutes = require('./routes/studyMaterialsRoutes');
 
 const numCPUs = os.cpus().length;
-console.log(numCPUs)
 if (cluster.isMaster) {
-    console.log(`Master ${process.pid} is running`);
 
     // Fork workers
     for (let i = 0; i < numCPUs; i++) {
@@ -30,7 +28,6 @@ if (cluster.isMaster) {
     }
 
     cluster.on('exit', (worker, code, signal) => {
-        console.log(`Worker ${worker.process.pid} died`);
         // Replace the dead worker
         cluster.fork();
     });
@@ -73,7 +70,7 @@ if (cluster.isMaster) {
 
     const PORT = process.env.PORT || 5000;
 
-    app.listen(PORT, () => {
+    app.listen(PORT,'0.0.0.0', () => {
         console.log(`Worker ${process.pid} started on PORT ${PORT}`);
     });
 }

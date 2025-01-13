@@ -21,7 +21,6 @@ exports.updateMobileNumber = async (req, res) => {
     try {
         const userId = req.user.id;
       const { mobileNumber } = req.body;
-      console.log(req.user , mobileNumber)
   
       if (!userId || !mobileNumber) {
         return res.status(400).json({

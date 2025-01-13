@@ -6,8 +6,6 @@ const { default: mongoose } = require('mongoose')
 const User = require('../models/user')
 const instance = require('../config/rajorpay')
 
-
-
 // Helper function to generate idempotency key
 function generateIdempotencyKey(userId, itemIds) {
     const data = `${userId}-${itemIds.sort().join('-')}-${Date.now()}`;
@@ -82,119 +80,12 @@ exports.captureMockTestPayment = async (req, res) => {
     }
 };
 
-exports.verifyMockTestPayment = async (req, res) => {
-    const session = await mongoose.startSession();
-    session.startTransaction();
-
-    const { razorpay_order_id, razorpay_payment_id, razorpay_signature, itemId } = req.body;
-    const userId = req.user.id;
-
-    try {
-        if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature || !itemId || !userId) {
-            return res.status(400).json({ success: false, message: "Payment verification failed. Missing required data." });
-        }
-
-        const existingVerification = await PaymentVerification.findOne({ razorpayOrderId: razorpay_order_id });
-        if (existingVerification) {
-            return res.status(201).json({ success: true, message: "Payment already verified" });
-        }
-
-        let body = razorpay_order_id + "|" + razorpay_payment_id;
-        const expectedSignature = crypto
-            .createHmac("sha256", process.env.RAZORPAY_SECRET)
-            .update(body.toString())
-            .digest("hex");
-
-        if (expectedSignature !== razorpay_signature) {
-            return res.status(400).json({ success: false, message: "Payment signature verification failed." });
-        }
-
-        const mockTestIds = Array.isArray(itemId) ? itemId : [itemId];
-        const userObjectId = new mongoose.Types.ObjectId(userId);
-
-        let retryAttempts = 3;
-        let updateSuccess = false;
-
-        console.log("retryAttempts", retryAttempts );
-        console.log("updateSuccess", updateSuccess );
-        
-
-        while (retryAttempts > 0 && !updateSuccess) {
-            try {
-                const updateResult = await MockTestSeries.updateMany(
-                    {
-                        _id: { $in: mockTestIds.map(id => new mongoose.Types.ObjectId(id)) },
-                        studentsEnrolled: { $ne: userObjectId }
-                    },
-                    {
-                        $addToSet: { studentsEnrolled: userObjectId }
-                    },
-                    { session }
-                );
-
-                if (updateResult.modifiedCount === mockTestIds.length) {
-                    updateSuccess = true; // All updates succeeded
-                } else {
-                    throw new Error("Not all mock test series were updated successfully.");
-                }
-            } catch (err) {
-                retryAttempts -= 1;
-                console.error(`Update failed, retrying... Attempts left: ${retryAttempts}`, err);
-                if (retryAttempts === 0) {
-                    throw new Error("Failed to update mock test series after multiple attempts");
-                }
-            }
-        }
-
-        await User.updateOne(
-            { _id: userObjectId },
-            { $addToSet: { mocktests: { $each: mockTestIds.map(id => new mongoose.Types.ObjectId(id)) } } },
-            { session }
-        );
-
-        await PaymentVerification.create([{
-            userId,
-            razorpayOrderId: razorpay_order_id,
-            razorpayPaymentId: razorpay_payment_id,
-            mockTestIds
-        }], { session });
-
-        await session.commitTransaction();
-
-        return res.status(200).json({ success: true, message: "Payment verified and access granted successfully." });
-    } catch (error) {
-        await session.abortTransaction();
-        console.error("Error in verifyMockTestPayment:", error);
-        return res.status(500).json({ success: false, message: "Internal server error during payment verification." });
-    } finally {
-        session.endSession();
-    }
-};
-
-// Helper function to send email (not exposed as an API endpoint)
-async function sendMockTestPaymentSuccessEmail(userId, orderId, paymentId, amount) {
-    try {
-        const user = await User.findById(userId);
-        await mailSender(
-            user.email,
-            `Payment Received for Mock Test Series`,
-            `Dear ${user.firstName},\n\nYour payment of INR ${amount / 100} has been received successfully.\nOrder ID: ${orderId}\nPayment ID: ${paymentId}\n\nThank you for your purchase!`
-        );
-        console.log(`Payment success email sent for order ${orderId}`);
-    } catch (error) {
-        console.error("Error in sending mail:", error);
-    }
-}
-
-
-
 exports.handleRazorpayWebhook = async (req, res) => {
     try {
         // Verify webhook signature
+        console.log("entered in webhook")
         const webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET;
         const signature = req.headers['x-razorpay-signature'];
-
-        console.log(signature , "ssssssss")
         
         const shasum = crypto.createHmac('sha256', webhookSecret);
         shasum.update(JSON.stringify(req.body));
@@ -215,7 +106,6 @@ exports.handleRazorpayWebhook = async (req, res) => {
             const { payload } = req.body;
             const event = payload.payment.entity;
 
-            // Handle different webhook events
             switch(req.body.event) {
                 case 'payment.captured': {
                     // Find the corresponding order
@@ -240,44 +130,25 @@ exports.handleRazorpayWebhook = async (req, res) => {
                         });
                     }
 
-                    // Update MockTestSeries enrollment with retry logic
-                    let retryAttempts = 3;
-                    let updateSuccess = false;
-
-                    while (retryAttempts > 0 && !updateSuccess) {
-                        try {
-                            const updateResult = await MockTestSeries.updateMany(
-                                {
-                                    _id: { 
-                                        $in: order.mockTestIds.map(id => 
-                                            new mongoose.Types.ObjectId(id)
-                                        ) 
-                                    },
-                                    studentsEnrolled: { 
-                                        $ne: new mongoose.Types.ObjectId(order.userId) 
-                                    }
-                                },
-                                {
-                                    $addToSet: { 
-                                        studentsEnrolled: new mongoose.Types.ObjectId(order.userId) 
-                                    }
-                                },
-                                { session }
-                            );
-
-                            if (updateResult.modifiedCount === order.mockTestIds.length) {
-                                updateSuccess = true;
-                            } else {
-                                throw new Error('Not all mock tests were updated');
+                    // Update MockTestSeries enrollment
+                    const updateResult = await MockTestSeries.updateMany(
+                        {
+                            _id: { 
+                                $in: order.mockTestIds.map(id => 
+                                    new mongoose.Types.ObjectId(id)
+                                ) 
+                            },
+                            studentsEnrolled: { 
+                                $ne: new mongoose.Types.ObjectId(order.userId) 
                             }
-                        } catch (err) {
-                            retryAttempts--;
-                            if (retryAttempts === 0) {
-                                throw new Error('Failed to update mock tests after retries');
+                        },
+                        {
+                            $addToSet: { 
+                                studentsEnrolled: new mongoose.Types.ObjectId(order.userId) 
                             }
-                            await new Promise(resolve => setTimeout(resolve, 1000));
-                        }
-                    }
+                        },
+                        { session }
+                    );
 
                     // Update user's mock tests
                     await User.updateOne(
@@ -306,7 +177,8 @@ exports.handleRazorpayWebhook = async (req, res) => {
                         webhookProcessedAt: new Date()
                     }], { session });
 
-                   
+                    console.log("Payment Verified Sucessfully")
+                    
                     break;
                 }
 
@@ -320,12 +192,10 @@ exports.handleRazorpayWebhook = async (req, res) => {
                         failureReason: event.error_description,
                         webhookProcessedAt: new Date()
                     }], { session });
-
-                  
+                    
                     break;
                 }
 
-                // Add other payment status handlers as needed
                 default:
                     console.log(`Unhandled webhook event: ${req.body.event}`);
             }
@@ -352,136 +222,3 @@ exports.handleRazorpayWebhook = async (req, res) => {
         });
     }
 };
-
-// Helper function to send success email
-async function sendPaymentSuccessEmail(userId, orderId, paymentId, amount) {
-    try {
-        const user = await User.findById(userId);
-        await mailSender(
-            user.email,
-            'Payment Successful - Mock Test Series',
-            `Dear ${user.firstName},
-
-Thank you for your purchase! Your payment has been successfully processed.
-
-Order Details:
-- Amount: INR ${amount / 100}
-- Order ID: ${orderId}
-- Payment ID: ${paymentId}
-
-You can now access your mock tests from your dashboard.
-
-Best regards,
-Your Platform Team`
-        );
-    } catch (error) {
-        console.error('Error sending success email:', error);
-        throw error;
-    }
-}
-
-// Helper function to send failure email
-async function sendPaymentFailureEmail(userId, orderId, errorDescription) {
-    try {
-        const user = await User.findById(userId);
-        await mailSender(
-            user.email,
-            'Payment Failed - Mock Test Series',
-            `Dear ${user.firstName},
-
-We noticed that there was an issue with your recent payment attempt.
-
-Order Details:
-- Order ID: ${orderId}
-- Error: ${errorDescription}
-
-Please try again or contact our support team if you need assistance.
-
-Best regards,
-Your Platform Team`
-        );
-    } catch (error) {
-        console.error('Error sending failure email:', error);
-        throw error;
-    }
-}
-
-
-// Verify the payment for mock tests
-// exports.verifyMockTestPayment = async (req, res) => {
-//     const session = await mongoose.startSession();
-//     session.startTransaction();
-
-//     const { razorpay_order_id, razorpay_payment_id, razorpay_signature, itemId } = req.body;
-//     const userId = req.user.id;
-//     console.log("body receivced ==>", req.body)
-
-//     try {
-//         if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature || !itemId || !userId) {
-//             return res.status(400).json({ success: false, message: "Payment verification failed. Missing required data." });
-//         }
-
-//         // Check if this payment was already verified
-//         const existingVerification = await PaymentVerification.findOne({ razorpayOrderId: razorpay_order_id });
-//         if (existingVerification) {
-//             return res.status(201).json({ success: true, message: "Payment already verified" });
-//         }
-//         console.log("payment already done ==>", existingVerification);
-
-//         let body = razorpay_order_id + "|" + razorpay_payment_id;
-//         const expectedSignature = crypto
-//             .createHmac("sha256", process.env.RAZORPAY_SECRET)
-//             .update(body.toString())
-//             .digest("hex");
-//         console.log("signature ==>", expectedSignature)
-//         if (expectedSignature !== razorpay_signature) {
-//             return res.status(400).json({ success: false, message: "Payment signature verification failed." });
-//         }
-
-//         const mockTestIds = Array.isArray(itemId) ? itemId : [itemId];
-//         console.log("moke test id ==>", mockTestIds);
-
-//         // Update MockTestSeries and User in a single operation
-//         const updateResult = await MockTestSeries.updateMany(
-//             {
-//                 _id: { $in: mockTestIds.map(id => new mongoose.Types.ObjectId(id)) },
-//                 studentsEnrolled: { $ne: new mongoose.Types.ObjectId(userId) }
-//             },
-//             {
-//                 $addToSet: { studentsEnrolled: new mongoose.Types.ObjectId(userId) }
-//             },
-//             { session }
-//         );
-
-//         // if (updateResult.modifiedCount !== mockTestIds.length) {
-//         //     throw new Error("Failed to update all mock test series");
-//         // }
-//         console.log("updated resuilt ==>", updateResult)
-//         await User.updateOne(
-//             { _id: new mongoose.Types.ObjectId(userId) },
-//             { $addToSet: { mocktests: { $each: mockTestIds.map(id => new mongoose.Types.ObjectId(id)) } } },
-//             { session }
-//         );
-
-//         await PaymentVerification.create([{
-//             userId,
-//             razorpayOrderId: razorpay_order_id,
-//             razorpayPaymentId: razorpay_payment_id,
-//             mockTestIds
-//         }], { session });
-//         console.log("verification create ==>", PaymentVerification);
-//         await session.commitTransaction();
-
-//         // // Send email asynchronously
-//         // const order = await Order.findOne({ razorpayOrderId: razorpay_order_id });
-//         // sendMockTestPaymentSuccessEmail(userId, razorpay_order_id, razorpay_payment_id, order.amount).catch(console.error);
-
-//         return res.status(200).json({ success: true, message: "Payment verified and access granted successfully." });
-//     } catch (error) {
-//         await session.abortTransaction();
-//         console.error("Error in verifyMockTestPayment:", error);
-//         return res.status(500).json({ success: false, message: "Internal server error during payment verification." });
-//     } finally {
-//         session.endSession();
-//     }
-// };

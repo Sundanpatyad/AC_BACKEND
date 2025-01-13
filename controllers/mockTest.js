@@ -82,7 +82,6 @@ exports.createMockTests = async (req, res) => {
   
       // Fetch mock details using findById with populate
       const mockDetails = await Mocktest.findById(mockId).populate('questions'); // Corrected to use `mockId` directly
-      console.log(mockDetails)
       // Check if mock is found
       if (!mockDetails) {
         return res.status(404).json({

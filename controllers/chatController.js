@@ -106,7 +106,6 @@ exports.getChatsForUser = async (req, res) => {
     try {
       // Access the logged-in user's ID from the request object
       const userId = req.user.id;
-      console.log(req.user)
       // Find chats where the logged-in user is either the user or the instructor
       const chats = await Chat.find({
         $or: [

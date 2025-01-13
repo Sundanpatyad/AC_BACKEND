@@ -6,7 +6,6 @@ exports.createStudyMaterial = async (req, res) => {
       ...req.body,
       createdBy: req.user.id
     });
-    console.log(studyMaterial)
     await studyMaterial.save();
     res.status(201).send(studyMaterial);
   } catch (error) {
@@ -40,7 +39,6 @@ exports.getAllStudyMaterials = async (req, res) => {
   exports.deleteStudyMaterial = async (req, res) => {
     try {
       const studyMaterialId = req.params.id;
-      console.log(studyMaterialId)
       const deletedStudyMaterial = await StudyMaterial.findByIdAndDelete(studyMaterialId);
   
       if (!deletedStudyMaterial) {
