@@ -1,0 +1,13 @@
+version: '3'
+services:
+  ac-backend:
+    container_name: ac-backend
+    build:
+      context: .
+      dockerfile: ./dockerfile
+      target: production
+    env_file:
+      - .env
+    ports:
+      - 8000:8000
+    restart: always
