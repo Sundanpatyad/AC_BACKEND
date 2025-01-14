@@ -19,6 +19,8 @@ exports.captureMockTestPayment = async (req, res) => {
     const userId = req.user.id;
     const idempotencyKey = req.headers['idempotency-key'] || generateIdempotencyKey(userId, mockTestIds);
 
+    console.log(userId , "UserId")
+
     if (mockTestIds.length === 0) {
         return res.status(400).json({ success: false, message: "Please provide Mock Test Series Id" });
     }
@@ -59,15 +61,18 @@ exports.captureMockTestPayment = async (req, res) => {
         };
 
         const paymentResponse = await instance.instance.orders.create(options);
+        console.log(paymentResponse , "PaymentResponcse")
 
         // Save the order with the idempotency key
-        await Order.create({
+         const order = await Order.create({
             userId,
             mockTestIds,
             amount: totalAmount,
             razorpayOrderId: paymentResponse.id,
             idempotencyKey
         });
+
+        console.log(order , "Order Details on Capture Payment ")
 
         res.status(200).json({
             success: true,
@@ -81,30 +86,39 @@ exports.captureMockTestPayment = async (req, res) => {
 };
 
 exports.handleRazorpayWebhook = async (req, res) => {
-    try {
-        // Verify webhook signature
-        console.log("entered in webhook")
-        const webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET;
-        const signature = req.headers['x-razorpay-signature'];
-        
-        const shasum = crypto.createHmac('sha256', webhookSecret);
-        shasum.update(JSON.stringify(req.body));
-        const digest = shasum.digest('hex');
+    // Maximum number of retry attempts
+    const MAX_RETRIES = 3;
+    // Initial delay in milliseconds
+    const INITIAL_DELAY = 1000;
 
-        if (signature !== digest) {
-            console.error('Invalid webhook signature');
-            return res.status(400).json({
-                success: false,
-                message: 'Invalid webhook signature'
-            });
-        }
+    const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
+    async function processWebhookWithRetry(attempt = 1) {
         const session = await mongoose.startSession();
-        session.startTransaction();
-
+        
         try {
+            // Verify webhook signature
+            const webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET;
+            const signature = req.headers['x-razorpay-signature'];
+            
+            const shasum = crypto.createHmac('sha256', webhookSecret);
+            shasum.update(JSON.stringify(req.body));
+            const digest = shasum.digest('hex');
+
+            if (signature !== digest) {
+                console.error('Invalid webhook signature');
+                return res.status(400).json({
+                    success: false,
+                    message: 'Invalid webhook signature'
+                });
+            }
+
+            session.startTransaction();
+
             const { payload } = req.body;
             const event = payload.payment.entity;
+
+            console.log(event.order_id , "Order_id in Webhook ")
 
             switch(req.body.event) {
                 case 'payment.captured': {
@@ -113,11 +127,13 @@ exports.handleRazorpayWebhook = async (req, res) => {
                         razorpayOrderId: event.order_id 
                     }).session(session);
 
+                    console.log(order , "OrderDetails on WebHook ")
+                    
                     if (!order) {
                         throw new Error('Order not found');
                     }
 
-                    // Verify if payment is already processed
+                    // Check for existing verification with session
                     const existingVerification = await PaymentVerification.findOne({ 
                         razorpayOrderId: event.order_id 
                     }).session(session);
@@ -130,60 +146,65 @@ exports.handleRazorpayWebhook = async (req, res) => {
                         });
                     }
 
-                    // Update MockTestSeries enrollment
-                    const updateResult = await MockTestSeries.updateMany(
+                    // Update MockTestSeries with session and improved query
+                    await MockTestSeries.bulkWrite([
                         {
-                            _id: { 
-                                $in: order.mockTestIds.map(id => 
-                                    new mongoose.Types.ObjectId(id)
-                                ) 
-                            },
-                            studentsEnrolled: { 
-                                $ne: new mongoose.Types.ObjectId(order.userId) 
+                            updateMany: {
+                                filter: {
+                                    _id: { 
+                                        $in: order.mockTestIds.map(id => 
+                                            new mongoose.Types.ObjectId(id)
+                                        ) 
+                                    },
+                                    studentsEnrolled: { 
+                                        $ne: new mongoose.Types.ObjectId(order.userId) 
+                                    }
+                                },
+                                update: {
+                                    $addToSet: { 
+                                        studentsEnrolled: new mongoose.Types.ObjectId(order.userId) 
+                                    }
+                                }
                             }
-                        },
-                        {
-                            $addToSet: { 
-                                studentsEnrolled: new mongoose.Types.ObjectId(order.userId) 
-                            }
-                        },
-                        { session }
-                    );
+                        }
+                    ], { session });
 
                     // Update user's mock tests
-                    await User.updateOne(
-                        { _id: new mongoose.Types.ObjectId(order.userId) },
-                        { 
-                            $addToSet: { 
-                                mocktests: { 
-                                    $each: order.mockTestIds.map(id => 
-                                        new mongoose.Types.ObjectId(id)
-                                    ) 
-                                } 
-                            } 
-                        },
-                        { session }
-                    );
+                    await User.bulkWrite([
+                        {
+                            updateOne: {
+                                filter: { _id: new mongoose.Types.ObjectId(order.userId) },
+                                update: { 
+                                    $addToSet: { 
+                                        mocktests: { 
+                                            $each: order.mockTestIds.map(id => 
+                                                new mongoose.Types.ObjectId(id)
+                                            ) 
+                                        } 
+                                    } 
+                                }
+                            }
+                        }
+                    ], { session });
 
                     // Create payment verification record
-                    await PaymentVerification.create([{
+                  const paymentVerify =  await PaymentVerification.create([{
                         userId: order.userId,
                         razorpayOrderId: event.order_id,
                         razorpayPaymentId: event.id,
                         mockTestIds: order.mockTestIds,
-                        amount: event.amount,
+                        amount: event.amount / 100,
                         status: 'completed',
                         paymentMethod: event.method,
                         webhookProcessedAt: new Date()
                     }], { session });
-
-                    console.log("Payment Verified Sucessfully")
+                    
+                    console.log(paymentVerify , "Payment Verification on WebHook")
                     
                     break;
                 }
 
                 case 'payment.failed': {
-                    // Handle failed payment
                     await PaymentVerification.create([{
                         userId: event.notes.userId,
                         razorpayOrderId: event.order_id,
@@ -208,11 +229,27 @@ exports.handleRazorpayWebhook = async (req, res) => {
 
         } catch (error) {
             await session.abortTransaction();
+
+            // Check if error is a WriteConflict and we haven't exceeded max retries
+            if (
+                error.code === 112 && 
+                error.errorLabels?.includes('TransientTransactionError') &&
+                attempt < MAX_RETRIES
+            ) {
+                console.log(`Retry attempt ${attempt} after write conflict`);
+                // Exponential backoff
+                await sleep(INITIAL_DELAY * Math.pow(2, attempt - 1));
+                return processWebhookWithRetry(attempt + 1);
+            }
+
             throw error;
         } finally {
             session.endSession();
         }
+    }
 
+    try {
+        return await processWebhookWithRetry();
     } catch (error) {
         console.error('Webhook processing error:', error);
         return res.status(500).json({

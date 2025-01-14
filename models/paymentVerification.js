@@ -19,13 +19,43 @@ const paymentVerificationSchema = new mongoose.Schema({
     mockTestIds: [{
         type: mongoose.Schema.Types.ObjectId,
         ref: 'MockTestSeries',
-        required: true
+        default: []  // Added default empty array for failed payments
     }],
-    verifiedAt: {
+    amount: {
+        type: Number,
+        required: false  // Optional since failed payments might not have amount
+    },
+    status: {
+        type: String,
+        required: true,
+        enum: ['completed', 'failed'],
+        default: 'completed'
+    },
+    paymentMethod: {
+        type: String,
+        required: false  // Optional since failed payments might not have method
+    },
+    failureReason: {
+        type: String,
+        required: false
+    },
+    webhookProcessedAt: {
+        type: Date,
+        required: true
+    },
+    createdAt: {
         type: Date,
         default: Date.now
     }
+}, {
+    timestamps: true  // Adds updatedAt and createdAt fields automatically
 });
+
+// Index for faster queries
+paymentVerificationSchema.index({ razorpayOrderId: 1 });
+paymentVerificationSchema.index({ razorpayPaymentId: 1 });
+paymentVerificationSchema.index({ userId: 1 });
+paymentVerificationSchema.index({ status: 1 });
 
 const PaymentVerification = mongoose.model('PaymentVerification', paymentVerificationSchema);
 
