@@ -92,17 +92,6 @@ exports.resetPassword = async (req, res) => {
             });
         }
 
-        // //console.log('userDetails.resetPasswordExpires = ', userDetails.resetPasswordExpires);
-
-        // check token is expire or not
-        if (!(userDetails.resetPasswordTokenExpires > Date.now())) {
-            return res.status(401).json({
-                success: false,
-                message: 'Token is expired, please regenerate token'
-            });
-        }
-
-
         // hash new passoword
         const hashedPassword = await bcrypt.hash(password, 10);
 
